@@ -1,29 +1,16 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { getConversation, getMessages, updateConversation } from "@/lib/store";
 
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    await supabaseAdmin
-      .from("messages")
-      .update({ read_at: new Date().toISOString() })
-      .eq("conversation_id", params.id)
-      .eq("sender_type", "customer")
-      .is("read_at", null);
-
-    const { data: messages, error } = await supabaseAdmin
-      .from("messages")
-      .select("*")
-      .eq("conversation_id", params.id)
-      .order("created_at", { ascending: true });
-
-    if (error) {
-      return new NextResponse("Database error", { status: 500 });
+    if (!getConversation(params.id)) {
+      return new NextResponse("Conversation not found", { status: 404 });
     }
 
-    return NextResponse.json(messages);
+    return NextResponse.json(getMessages(params.id, true));
   } catch (error) {
     return new NextResponse("Internal Server Error", { status: 500 });
   }
@@ -41,18 +28,14 @@ export async function PATCH(
       return new NextResponse("Invalid mode", { status: 400 });
     }
 
-    const { data, error } = await supabaseAdmin
-      .from("conversations")
-      .update({ mode })
-      .eq("id", params.id)
-      .select()
-      .single();
+    const data = updateConversation(params.id, {
+      mode,
+      updated_at: new Date().toISOString(),
+    });
 
-    if (error) {
-      return new NextResponse("Database error", { status: 500 });
-    }
-
-    return NextResponse.json(data);
+    return data
+      ? NextResponse.json(data)
+      : new NextResponse("Conversation not found", { status: 404 });
   } catch (error) {
     return new NextResponse("Internal Server Error", { status: 500 });
   }

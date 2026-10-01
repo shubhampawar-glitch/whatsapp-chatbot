@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
 import { aiClient, SYSTEM_PROMPT } from "@/lib/ai";
+import {
+  addMessage,
+  createConversation,
+  findConversationByPhone,
+  findMessageByWhatsAppId,
+  getMessages,
+  updateConversation,
+} from "@/lib/store";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 
 export async function GET(request: Request) {
@@ -55,52 +62,32 @@ export async function POST(request: Request) {
     const whatsappMsgId = message.id;
     const name = value.contacts?.[0]?.profile?.name || "Unknown";
 
-    let { data: conversation } = await supabaseAdmin
-      .from("conversations")
-      .select("*")
-      .eq("phone", phone)
-      .single();
+    let conversation = findConversationByPhone(phone);
 
     if (!conversation) {
-      const { data: newConv } = await supabaseAdmin
-        .from("conversations")
-        .insert({ phone, name })
-        .select()
-        .single();
-      conversation = newConv;
+      conversation = createConversation(phone, name);
     } else if (conversation.name !== name) {
-      await supabaseAdmin
-        .from("conversations")
-        .update({ name, updated_at: new Date().toISOString() })
-        .eq("id", conversation.id);
+      updateConversation(conversation.id, {
+        name,
+        updated_at: new Date().toISOString(),
+      });
     }
 
     if (!conversation) {
       return new NextResponse("Failed to create conversation", { status: 500 });
     }
 
-    const { data: existingMsg } = await supabaseAdmin
-      .from("messages")
-      .select("id")
-      .eq("whatsapp_msg_id", whatsappMsgId)
-      .single();
-
-    if (existingMsg) {
+    if (findMessageByWhatsAppId(whatsappMsgId)) {
       return new NextResponse("OK", { status: 200 });
     }
 
-    await supabaseAdmin.from("messages").insert({
+    addMessage({
       conversation_id: conversation.id,
       role: "user",
       sender_type: "customer",
       content: text,
       whatsapp_msg_id: whatsappMsgId,
     });
-
-    await supabaseAdmin
-      .from("conversations")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("id", conversation.id);
 
     if (conversation.mode === "agent") {
       processAgentReply(conversation.id, phone).catch(console.error);
@@ -114,14 +101,7 @@ export async function POST(request: Request) {
 }
 
 async function processAgentReply(conversationId: string, phone: string) {
-  const { data: messages } = await supabaseAdmin
-    .from("messages")
-    .select("role, content")
-    .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true })
-    .limit(20);
-
-  if (!messages) return;
+  const messages = getMessages(conversationId).slice(-20);
 
   const chatHistory = messages.map((message) => ({
     role: message.role as "user" | "assistant",
@@ -142,18 +122,13 @@ async function processAgentReply(conversationId: string, phone: string) {
       "Sorry, I couldn't process that.";
     const sentMessage = await sendWhatsAppMessage(phone, replyContent);
 
-    await supabaseAdmin.from("messages").insert({
+    addMessage({
       conversation_id: conversationId,
       role: "assistant",
       sender_type: "ai",
       content: replyContent,
       whatsapp_msg_id: sentMessage.id,
     });
-
-    await supabaseAdmin
-      .from("conversations")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("id", conversationId);
   } catch (error) {
     console.error("AI or WhatsApp sending error:", error);
   }

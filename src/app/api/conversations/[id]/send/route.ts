@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { addMessage, getConversation } from "@/lib/store";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 
 export async function POST(
@@ -14,42 +14,21 @@ export async function POST(
       return new NextResponse("Content is required", { status: 400 });
     }
 
-    // Get conversation phone number
-    const { data: conversation, error: convError } = await supabaseAdmin
-      .from("conversations")
-      .select("phone")
-      .eq("id", params.id)
-      .single();
-
-    if (convError || !conversation) {
+    const conversation = getConversation(params.id);
+    if (!conversation) {
       return new NextResponse("Conversation not found", { status: 404 });
     }
 
     // Send via Meta WhatsApp Cloud API
     const sentMessage = await sendWhatsAppMessage(conversation.phone, content);
 
-    // Save to DB
-    const { data: message, error: msgError } = await supabaseAdmin
-      .from("messages")
-      .insert({
-        conversation_id: params.id,
-        role: "assistant", // Agent or Human, it's from our side
-        sender_type: "owner",
-        content,
-        whatsapp_msg_id: sentMessage.id,
-      })
-      .select()
-      .single();
-
-    if (msgError) {
-      return new NextResponse("Failed to save message", { status: 500 });
-    }
-
-    // Update conversation updated_at
-    await supabaseAdmin
-      .from("conversations")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("id", params.id);
+    const message = addMessage({
+      conversation_id: params.id,
+      role: "assistant",
+      sender_type: "owner",
+      content,
+      whatsapp_msg_id: sentMessage.id,
+    });
 
     return NextResponse.json(message);
   } catch (error) {

@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
 
 type SenderType = "customer" | "ai" | "owner";
 type Conversation = {
@@ -57,21 +56,14 @@ export default function Dashboard() {
 
   useEffect(() => {
     void fetchConversations();
-    const channel = supabase.channel("owner-inbox")
-      .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, () => void fetchConversations())
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => void fetchConversations())
-      .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    const interval = window.setInterval(() => void fetchConversations(), 3000);
+    return () => window.clearInterval(interval);
   }, []);
   useEffect(() => {
     if (!selectedConvId) { setMessages([]); return; }
     void fetchMessages(selectedConvId);
-    const channel = supabase.channel(`owner-messages-${selectedConvId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${selectedConvId}` }, (payload) => {
-        setMessages((current) => current.some((message) => message.id === payload.new.id) ? current : [...current, payload.new as Message]);
-        void fetchConversations();
-      }).subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    const interval = window.setInterval(() => void fetchMessages(selectedConvId), 3000);
+    return () => window.clearInterval(interval);
   }, [selectedConvId]);
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
