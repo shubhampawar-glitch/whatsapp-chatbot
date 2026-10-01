@@ -34,6 +34,7 @@ export async function POST(
       .insert({
         conversation_id: params.id,
         role: "assistant", // Agent or Human, it's from our side
+        sender_type: "owner",
         content,
         whatsapp_msg_id: sentMessage.id,
       })

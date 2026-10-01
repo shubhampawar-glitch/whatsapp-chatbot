@@ -11,8 +11,10 @@ create table messages (
   id uuid default gen_random_uuid() primary key,
   conversation_id uuid references conversations(id) on delete cascade not null,
   role text not null check (role in ('user', 'assistant')),
+  sender_type text not null default 'ai' check (sender_type in ('customer', 'ai', 'owner')),
   content text not null,
   whatsapp_msg_id text unique,
+  read_at timestamp with time zone,
   created_at timestamp with time zone default now()
 );
 

@@ -92,6 +92,7 @@ export async function POST(request: Request) {
     await supabaseAdmin.from("messages").insert({
       conversation_id: conversation.id,
       role: "user",
+      sender_type: "customer",
       content: text,
       whatsapp_msg_id: whatsappMsgId,
     });
@@ -144,6 +145,7 @@ async function processAgentReply(conversationId: string, phone: string) {
     await supabaseAdmin.from("messages").insert({
       conversation_id: conversationId,
       role: "assistant",
+      sender_type: "ai",
       content: replyContent,
       whatsapp_msg_id: sentMessage.id,
     });

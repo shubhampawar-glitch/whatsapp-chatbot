@@ -10,7 +10,9 @@ export async function GET() {
         messages (
           content,
           created_at,
-          role
+          role,
+          sender_type,
+          read_at
         )
       `)
       .order("updated_at", { ascending: false });
@@ -28,6 +30,10 @@ export async function GET() {
       return {
         ...conv,
         lastMessage: sortedMessages?.[0] || null,
+        unreadCount: sortedMessages?.filter(
+          (message: any) => message.sender_type === "customer" && !message.read_at
+        ).length || 0,
+        messageCount: sortedMessages?.length || 0,
         messages: undefined, // remove full history
       };
     });

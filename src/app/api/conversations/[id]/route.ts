@@ -6,6 +6,13 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    await supabaseAdmin
+      .from("messages")
+      .update({ read_at: new Date().toISOString() })
+      .eq("conversation_id", params.id)
+      .eq("sender_type", "customer")
+      .is("read_at", null);
+
     const { data: messages, error } = await supabaseAdmin
       .from("messages")
       .select("*")
